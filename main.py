@@ -53,6 +53,9 @@ MIN_HOUR1_FRACTION = 0.05
 SPREAD_INFLATION = 1.25
 # Minimum comparables in a tertile before falling back to the whole set.
 MIN_TERTILE_SIZE = 8
+# Minimum ratios in a tertile for one hour before widening the pool to
+# every usable comparable for that hour (see _forecast_case).
+MIN_HOUR_RATIOS = 3
 
 
 def _parse_time(text):
@@ -160,6 +163,14 @@ def _forecast_case(case):
     log_q = {}
     for hour in range(2, 25):
         ratios = sorted(c[1][hour] for c in group if hour in c[1])
+        if len(ratios) < MIN_HOUR_RATIOS:
+            # Too few comparables in this tertile report this hour. With
+            # none, the median below would silently fall back to a flat
+            # forecast (quantile of [] is 0.0); with one, all five
+            # quantiles would collapse to that single curve. Widen the
+            # pool to every usable comparable for this hour, as the
+            # tertile fallback already does for a too-small tertile.
+            ratios = sorted(c[1][hour] for c in curves if hour in c[1])
         median = _quantile(ratios, 0.5)
         log_q[hour] = [
             median + SPREAD_INFLATION * (_quantile(ratios, level) - median)
